@@ -18,7 +18,7 @@ var states = [
 ];
 var findInState = function(_whichName) {
 	console.log('_whichName : ',_whichName);
-	var returnState = 'TH';
+	var returnState = '';
 	for (var i = 0; i < states.length; i++) {
 		// for everything that has max 7 chars
 		if (_whichName.toLowerCase().indexOf(states[i].name.toLowerCase())>-1){
@@ -59,14 +59,19 @@ var returnIsoDate = function(_whichDate) {
 	console.log(splitDate[2]+'-'+splitDate[1]+'-'+splitDate[0]);
 	return new Date(splitDate[2],splitDate[1]-1,splitDate[0]);
 };
-
+var returnEmail = function(_email){
+	return _email.replace(/aet/g,'@').replace(/at/g,'').replace('(','').replace(')','');
+};
 var writeFile = {
+	href: 'href.json',
+	temp: 'temp.json',
 	fin : 'outcome.json'
 };
 
 var url = '';
 // save all article hrefs
 var hrefArray = [];
+var hrefCounter = 0;
 // save all events
 var _events = [];
 // count number of updated objects
@@ -109,10 +114,98 @@ var getImg = function(_rawHtml, _index){
 
 	counter++;
 
-	if (counter === _events.length) {
-		getMapData();
-	}
+	console.log(counter + ' / '+ _events.length);
 
+
+	//PUT BACK !!!
+
+	// if (counter === _events.length-1) {
+	// 	getMapData();
+	// }
+
+
+	writeToFile(writeFile.fin,_events[_index]);
+};
+
+
+var makeUrl = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		_events[i].url = _events[i].name.toString().toLowerCase().replace(/\s/g, '-');
+		writeToFile(writeFile.fin,_events[i]);
+	}
+};
+
+var prettifyUrl = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].url.indexOf('--') > -1 ){
+			console.log('before : ',_events[i].url);
+			_events[i].url = _events[i].url.substring(0, _events[i].url.indexOf('--')-1);
+			console.log('after : ',_events[i].url);
+		}
+		_events[i].url = _events[i].url.replace(/\s/g, '-').replace(/'/g, '').replace('(','').replace(')','').replace('.','').replace('/','-').replace('---','-').replace('--','-');
+		writeToFile(writeFile.fin,_events[i]);
+	}
+};
+var prettifyImageUrl = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].image.indexOf('.de') > -1){
+			//get next char
+			var _de = _events[i].image.charAt(_events[i].image.indexOf('.de')+3);
+			if (_de !== '/' ){
+				// console.log('_events[i].name : ',_events[i].name);
+				_events[i].image = _events[i].image.replace('.de', '.de/');
+			}
+			var _at = _events[i].image.charAt(_events[i].image.indexOf('.at')+3);
+			if (_at !== '/' ){
+				_events[i].image = _events[i].image.replace('.at', '.at/');
+			}
+			var _ch = _events[i].image.charAt(_events[i].image.indexOf('.ch')+3);
+			if (_ch !== '/' ){
+				_events[i].image = _events[i].image.replace('.ch', '.ch/');
+			}
+			var _nl = _events[i].image.charAt(_events[i].image.indexOf('.nl')+3);
+			if (_nl !== '/' ){
+				_events[i].image = _events[i].image.replace('.nl', '.nl/');
+			}
+
+		}
+		writeToFile(writeFile.fin,_events[i]);
+	}
+};
+var checkIfPlaceExists = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].place.length<1){
+			console.log('no place for ',_events[i].name);
+		}
+	}
+};
+var checkIfMapDataExists = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (typeof _events[i].lat === 'undefined'){
+			console.log('no map data for ',_events[i].name);
+		}
+	}
+};
+var removeAllNoNames = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].name.length>0){
+			writeToFile(writeFile.fin,_events[i]);
+		}
+	}
+};
+
+var getEventDetail = function() {
+
+
+	var hrefs = [];
+
+	for (var i=0; i<hrefs.length; i++) { //_events.length
+
+		getEventDetails(hrefs[i].href);
+
+		hrefCounter++;
+
+	}
 
 };
 
@@ -121,7 +214,7 @@ var goToWebsite = function(){
 	// console.log('_json[0] : ',_json[0]);
 	for (var i=0; i<_events.length; i++) { //_events.length
 		console.log('get website : ',_events[i].website);
-		if (_events[i].website.length>0) {
+		if (_events[i].website.length>7) {
 			getUrl(_events[i].website, getImg, i);
 		} else {
 			counter++;
@@ -136,6 +229,7 @@ var goToWebsite = function(){
  */
 
 var getCountry = function(_rawData, _index){
+
 
 	try
 	{
@@ -155,6 +249,7 @@ var getCountry = function(_rawData, _index){
 	}
 
 
+	console.log(_index + ' : ' +_events[_index]);
 
 	writeToFile(writeFile.fin,_events[_index]);
 
@@ -163,23 +258,31 @@ var getCountry = function(_rawData, _index){
 
 var getMapData = function() {
 
-	// console.log('_json[0] : ',_json[0]);
 	for (var i=0; i<_events.length; i++) { //_events.length
 
 		console.log(' _events[i].place : ', _events[i].place);
-		getUrl('http://nominatim.openstreetmap.org/search.php?q='+ _events[i].place +'&format=json&limit=1', getCountry, i, 'iso-8859-1');
+		getUrl('http://nominatim.openstreetmap.org/search.php?q='+ _events[i].place +'&format=json&limit=1', getCountry, i);
 
 	}
 
+
 };
 
+var filterLinks = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].href.indexOf('volkslauf')>-1){
+			writeToFile(writeFile.temp, _events[i]);
+		}
+	}
+};
 
 var openFile = function(_fileName, callback) {
 	fs.readFile(_fileName, function (err, data) {
 		if (err) {
 			return console.error(err);
 		}
-		callback(data.toString());
+		_events = JSON.parse(data);
+		callback();
 	});
 };
 
@@ -194,7 +297,7 @@ var filterHtml = function(_rawHtml){
 	var finalObject = {
 		"name": "",
 		"url": "",
-		"sport_type": "TR",
+		"sport_type": "LF",
 		"organiser": "",
 		"contact_person": "",
 		"date_from": "",
@@ -203,7 +306,7 @@ var filterHtml = function(_rawHtml){
 		"zip": "",
 		"place": "",
 		"country": "DE",
-		"state": "TH",
+		"state": "",
 		"website": "",
 		"tel": "",
 		"email": "",
@@ -214,39 +317,89 @@ var filterHtml = function(_rawHtml){
 	// var filteredHtml = iconv.decode(_rawHtml, 'utf8');
 	var $ = cheerio.load(_rawHtml);
 
-	var eventDetails = $('.ac_event_details');
-	var eventInfo = $(eventDetails).find('.form-group > div');
-	finalObject.name = eventInfo[0].children[0].data;
-	finalObject.sport_type = findInType(eventInfo[2].children[0].data);
-	finalObject.organiser = eventInfo[1].children[0].data;
-	finalObject.website = eventInfo[3].children[1].attribs.href;
-	finalObject.address = eventInfo[4].children[0].data;
-	var place = eventInfo[5].children[0].data;
-	finalObject.zip = place.split(' ')[0];
-	finalObject.place = place.split(' ')[1];
-	finalObject.contact_person = eventInfo[6].children[0].data;
-	finalObject.tel = eventInfo[7].children[0].data;
-	finalObject.email = eventInfo[8].children[0].data;
-	finalObject.url = eventInfo[0].children[0].data.replace(/\s/g, '-').toLowerCase()+'-'+finalObject.place.replace(/\s/g, '-').toLowerCase();
+	var eventDetails = $('#ausgabe1')[0];
 
-	var competitionDetails = $('.ac_event_competition');
-	var competitionInfo = $(competitionDetails).find('.form-group > div');
-	var dates = competitionInfo[0].children[0].data;
-	// console.log('dates : ',dates);
-	finalObject.date_from = returnIsoDate(dates.split('-')[0]);
-	finalObject.date_till = returnIsoDate(dates.split('-')[1]);
+	if (typeof eventDetails !== 'undefined') {
 
+		$(eventDetails).each( function(index, element) {
+
+			var _el = $(element).find('td');
+
+			if (typeof _el !== 'undefined') {
+
+				_el.each(function (_i, _e) {
+
+					var _data = $(_e)[0].children[0];
+
+					if (_i === 0){
+						var _date = returnIsoDate(_data.data);
+						finalObject.date_from = _date;
+						finalObject.date_till = _date;
+					}
+
+					if (_i === 1){
+						finalObject.name = _data.children[0].data;
+						finalObject.url = _data.children[0].data.replace(/\s/g, '-');
+					}
+
+					if (_i === 2){
+						finalObject.place = _data.data;
+						finalObject.name = finalObject.name + ' ' + finalObject.place;
+						finalObject.url = replaceUmlaute(finalObject.name).toLowerCase();
+					}
+
+				});
+
+			}
+
+		});
+	}
+
+	// Event Details : Email + Website
+
+	var addressDetails = $('#ausgabe2')[0];
+
+	if (typeof addressDetails !== 'undefined') {
+
+		$(addressDetails).each( function(index, element) {
+
+			var _el = $(element).find('td');
+
+			if (typeof _el !== 'undefined') {
+
+				_el.each(function(_i,_e){
+
+					var _data = $(_e)[0].children[0];
+
+					if (_data.data.toString().toLowerCase().indexOf('email') > -1) {
+						finalObject.email = returnEmail(_data.data.toString().toLowerCase().replace('email', '').replace(':', '').replace(/\s/g, ''));
+					}
+					if (_data.data.toString().toLowerCase().indexOf('homepage') > -1) {
+						var _website = _data.next.attribs.href;
+						finalObject.website = _website;
+					}
+				});
+
+			}
+
+		});
+
+
+		console.log('finalObject : ',finalObject);
+
+	}
 	_events.push(finalObject);
 
-	if (_events.length === hrefArray.length){
+	console.log(_events.length + ' / ' +hrefCounter);
+	if (_events.length === hrefCounter){
 		// get
 		// get Image
 		goToWebsite();
 	}
 
-	console.log('_events.length : ',_events.length);
+	// console.log('_events.length : ',_events.length);
 	//remove in a bit
-	//writeToFile(writeFile.one, finalObject);
+	writeToFile(writeFile.temp, finalObject);
 
 };
 
@@ -287,11 +440,12 @@ var getEventDetails = function(_url){
 	 * get article
 	 */
 
-	console.log('_url : ',_url);
+	//console.log('_url : ',_url);
 
 	getUrl(url+_url, filterHtml);
 
 };
+
 
 var getEvents = function(_html) {
 
@@ -304,7 +458,7 @@ var getEvents = function(_html) {
 
 	var $ = cheerio.load(_html);
 
-	hrefArray = $('.acSporteventRow');
+	hrefArray = $('a');
 
 	if (hrefArray.length<1){
 		return false;
@@ -313,12 +467,25 @@ var getEvents = function(_html) {
 
 		var a = hrefArray[i].attribs.href;
 
-		getEventDetails(hrefArray[i].attribs.href);
+		console.log('a : ',a );
+
+		if (a.indexOf('volkslauf')>-1) {
+
+			writeToFile(writeFile.href, { href : a });
+
+			getEventDetails(hrefArray[i].attribs.href);
+
+			hrefCounter++;
+
+		}
 
 	}
 
 
 };
+
+
+
 
 var replaceUmlaute = function(_text) {
 
@@ -336,7 +503,7 @@ var replaceUmlaute = function(_text) {
 
 var getUrl = function(_url, callback, _index, _encoding) {
 	var encoding = typeof _encoding !== 'undefined' ? _encoding : 'utf-8';
-	console.log('encoding : ',encoding);
+	// console.log('encoding : ',encoding);
 	/**
 	 * request url
 	 */
@@ -355,9 +522,9 @@ var getUrl = function(_url, callback, _index, _encoding) {
 			// writeToFile(iconv.decode(chunk, 'iso-8859-1'));
 		});
 		res.on('end', function(){
-			// console.log('loaded!');
+			console.log('loaded!');
 			var _body = replaceUmlaute(iconv.decode(finalStr, encoding));
-			console.log('_body : ',_body);
+			// console.log('_body : ',_body);
 			if (typeof _index !== 'undefined') {
 				callback(_body, _index);
 			} else {
@@ -380,6 +547,12 @@ var getUrl = function(_url, callback, _index, _encoding) {
 
 removeFile(writeFile.fin);
 console.log('process.argv : ',process.argv[2]);
-url = process.argv[2];
-getUrl(process.argv[2]+ ' ' + process.argv[3] + '/?page='+process.argv[4],getEvents);
+// url = process.argv[2];
+url = '';
 
+
+console.log('url : ', url+process.argv[2]);
+// getUrl(url + process.argv[2],getEvents);
+//getEventDetails('');
+openFile('temp.json', checkIfMapDataExists);
+// getEventDetail();
