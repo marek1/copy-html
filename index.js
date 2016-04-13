@@ -74,16 +74,20 @@ var hrefArray = [];
 var hrefCounter = 0;
 // save all events
 var _events = [];
+var _events1 = [];
 // count number of updated objects
 var counter = 0;
 
 //DI
 var http = require('http');
+var https = require('https');
+var Agent = require('socks5-http-client/lib/Agent');
+var request = require('request');
+
 var cheerio = require('cheerio');
 var fs = require('fs');
 var iconv  = require('iconv-lite');
 var encoding = require("encoding");
-
 
 /**
  * take final json to add image
@@ -96,18 +100,23 @@ var getImg = function(_rawHtml, _index){
 
 		var $ = cheerio.load(_rawHtml);
 
-		var imgs = $('img');
+		// overwrite image only if not already has content
+		if (_events[_index].image.length<1) {
 
-		if (imgs.length > 0) {
-			var _imgUrl = imgs[0].attribs.src;
-			console.log('_imgUrl : ',_imgUrl);
-			if (_imgUrl) {
-				if (_imgUrl.indexOf('http') > -1) {
-					_events[_index].image = _imgUrl;
-				} else {
-					_events[_index].image = _events[_index].website + _imgUrl;
+			var imgs = $('img');
+
+			if (imgs.length > 0) {
+				var _imgUrl = imgs[0].attribs.src;
+				console.log('_imgUrl : ',_imgUrl);
+				if (_imgUrl) {
+					if (_imgUrl.indexOf('http') > -1) {
+						_events[_index].image = _imgUrl;
+					} else {
+						_events[_index].image = _events[_index].website + _imgUrl;
+					}
 				}
 			}
+
 		}
 
 	}
@@ -116,15 +125,13 @@ var getImg = function(_rawHtml, _index){
 
 	console.log(counter + ' / '+ _events.length);
 
-
-	//PUT BACK !!!
-
-	// if (counter === _events.length-1) {
-	// 	getMapData();
-	// }
+	if (counter === _events.length-1) {
+		// getMapData();
+		writeToFile(writeFile.fin,_events);
+	}
 
 
-	writeToFile(writeFile.fin,_events[_index]);
+
 };
 
 
@@ -143,16 +150,26 @@ var prettifyUrl = function(){
 			console.log('after : ',_events[i].url);
 		}
 		_events[i].url = _events[i].url.replace(/\s/g, '-').replace(/'/g, '').replace('(','').replace(')','').replace('.','').replace('/','-').replace('---','-').replace('--','-');
+		_events[i].url = replaceUmlaute(_events[i].url);
+		writeToFile(writeFile.fin,_events[i]);
+	}
+};
+
+var prettifyPlace = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		_events[i].place = _events[i].place.replace(/\s/g, '-').replace(/'/g, '').replace('(','').replace(')','').replace('.','').replace('/','-').replace('---','-').replace('--','-');
+		_events[i].place = replaceUmlaute(_events[i].place);
 		writeToFile(writeFile.fin,_events[i]);
 	}
 };
 var prettifyImageUrl = function(){
+
 	for (var i=0; i<_events.length; i++) { //_events.length
-		if (_events[i].image.indexOf('.de') > -1){
+
+		if (_events[i].image.indexOf('.de') > -1 || _events[i].image.indexOf('.at') > -1 || _events[i].image.indexOf('.ch') > -1 || _events[i].image.indexOf('.nl') > -1 || _events[i].image.indexOf('.it') > -1 || _events[i].image.indexOf('.be') > -1 || _events[i].image.indexOf('.cz') > 0) {
 			//get next char
 			var _de = _events[i].image.charAt(_events[i].image.indexOf('.de')+3);
 			if (_de !== '/' ){
-				// console.log('_events[i].name : ',_events[i].name);
 				_events[i].image = _events[i].image.replace('.de', '.de/');
 			}
 			var _at = _events[i].image.charAt(_events[i].image.indexOf('.at')+3);
@@ -167,6 +184,18 @@ var prettifyImageUrl = function(){
 			if (_nl !== '/' ){
 				_events[i].image = _events[i].image.replace('.nl', '.nl/');
 			}
+			var _it = _events[i].image.charAt(_events[i].image.indexOf('.it')+3);
+			if (_it !== '/' ){
+				_events[i].image = _events[i].image.replace('.it', '.it/');
+			}
+			var _be = _events[i].image.charAt(_events[i].image.indexOf('.be')+3);
+			if (_be !== '/' ){
+				_events[i].image = _events[i].image.replace('.be', '.be/');
+			}
+			var _cz = _events[i].image.charAt(_events[i].image.indexOf('.cz')+3);
+			if (_cz !== '/' ){
+				_events[i].image = _events[i].image.replace('.cz', '.cz/');
+			}
 
 		}
 		writeToFile(writeFile.fin,_events[i]);
@@ -175,6 +204,13 @@ var prettifyImageUrl = function(){
 var checkIfPlaceExists = function(){
 	for (var i=0; i<_events.length; i++) { //_events.length
 		if (_events[i].place.length<1){
+			console.log('no place for ',_events[i].name);
+		}
+	}
+};
+var checkIfPlaceIsBad = function(){
+	for (var i=0; i<_events.length; i++) { //_events.length
+		if (_events[i].place.indexOf('@')>-1){
 			console.log('no place for ',_events[i].name);
 		}
 	}
@@ -194,6 +230,7 @@ var removeAllNoNames = function(){
 	}
 };
 
+
 var getEventDetail = function() {
 
 
@@ -209,6 +246,61 @@ var getEventDetail = function() {
 
 };
 
+var getDescription = function(_returnedJSON, _index){
+
+	var _json = JSON.parse(_returnedJSON);
+
+	console.log('_json : ',_json);
+
+	var _desc = '';
+
+	if (typeof _json.items !== 'undefined') {
+
+		if (_json.items.length>0){
+
+			for (var i = 0; i < _json.items.length; i++) {
+
+				if (i>0){
+					_desc += '\n\n';
+				}
+				_desc += _json.items[i].snippet;
+
+			}
+
+		}
+
+	}
+
+	_events[_index].description = _desc;
+
+	counter++;
+
+	console.log(counter + ' / '+ _events.length);
+
+	if (counter === _events.length-1) {
+		writeToFile(writeFile.fin,_events);
+	}
+
+
+};
+var _iCounter = 0;
+var goToGoogle = function() {
+	console.log('_events : ',_events.length);
+	for (var i=0; i<_events.length; i++) { //_events.length
+		console.log(i);
+		if (_events[i].description.length<1 && _iCounter < 1) {
+			var query = _events[i].url.toString().replace(/-/g,'+')+'+strecke+2016';
+			console.log('query : ',query);
+			getJson('https://www.googleapis.com/customsearch/v1?key=AIzaSyCImlw7srUktwyVIXi4Xmxt-N6xmpNCBGI&cx=001406886050860568432:bpvx-xmuvz8&q='+query, getDescription, i);
+			_iCounter++;
+		} else {
+			console.log('we already have a description');
+			counter++;
+			// writeToFile(writeFile.fin,_events[i]);
+		}
+	}
+};
+
 var goToWebsite = function(){
 
 	// console.log('_json[0] : ',_json[0]);
@@ -218,6 +310,7 @@ var goToWebsite = function(){
 			getUrl(_events[i].website, getImg, i);
 		} else {
 			counter++;
+			writeToFile(writeFile.fin,_events[i]);
 		}
 	}
 
@@ -260,28 +353,81 @@ var getMapData = function() {
 
 	for (var i=0; i<_events.length; i++) { //_events.length
 
-		console.log(' _events[i].place : ', _events[i].place);
-		getUrl('http://nominatim.openstreetmap.org/search.php?q='+ _events[i].place +'&format=json&limit=1', getCountry, i);
+		if (typeof _events[i].lat === 'undefined') {
+			console.log(' no map data for : ', _events[i].name);
+			var zip = '';
+			if ( _events[i].zip.length > 0){
+				zip = _events[i].zip;
+			}
+			var country = 'Deutschland';
+			if ( _events[i].country === 'AT'){
+				country = 'Oesterreich';
+			}
+			if ( _events[i].country === 'CH'){
+				country = 'Schweiz';
+			}
+			if ( _events[i].country === 'NL'){
+				country = 'Niederlande';
+			}
+			if ( _events[i].country === 'CZ'){
+				country = 'Tschechische+Republik';
+			}
+			if ( _events[i].country === 'IT'){
+				country = 'Italien';
+			}
+			if ( _events[i].country === 'BE'){
+				country = 'Belgien';
+			}
+			getJson('http://nominatim.openstreetmap.org/search.php?q='+zip+'+'+_events[i].place +'+'+country+'&format=json&limit=1', getCountry, i);
 
+		} else {
+			writeToFile(writeFile.fin,_events[i]);
+		}
 	}
-
 
 };
 
 var filterLinks = function(){
 	for (var i=0; i<_events.length; i++) { //_events.length
-		if (_events[i].href.indexOf('volkslauf')>-1){
+		// if (_events[i].href.indexOf('')>-1){
 			writeToFile(writeFile.temp, _events[i]);
-		}
+		// }
 	}
 };
+var compare = function(){
 
-var openFile = function(_fileName, callback) {
+	for (var i=0; i<_events.length; i++) { //_events.length
+		var found = false;
+		for (var j=0; j<_events1.length; j++) { //_events.length
+
+			if (_events[i].name === _events[j].name){
+				found = true;
+				break;
+			}
+		}
+		if (!!found) {
+			console.log('this  : ',_events[i].name);
+		}
+	}
+
+};
+var compareWith = function() {
+	openFile('outcome.json', compare, _events1);
+};
+
+var openFile = function(_fileName, callback, _saveAs) {
 	fs.readFile(_fileName, function (err, data) {
 		if (err) {
 			return console.error(err);
 		}
-		_events = JSON.parse(data);
+		if (typeof _saveAs === 'undefined') {
+
+			_events = JSON.parse(data);
+
+		} else {
+
+			_saveAs = JSON.parse(data);
+		}
 		callback();
 	});
 };
@@ -292,7 +438,7 @@ var openFile = function(_fileName, callback) {
  */
 var filterHtml = function(_rawHtml){
 
-	// console.log('_rawHtml : ',_rawHtml);
+	console.log('_rawHtml : ',_rawHtml);
 
 	var finalObject = {
 		"name": "",
@@ -343,7 +489,7 @@ var filterHtml = function(_rawHtml){
 					}
 
 					if (_i === 2){
-						finalObject.place = _data.data;
+						finalObject.place = replaceUmlaute(_data.data);
 						finalObject.name = finalObject.name + ' ' + finalObject.place;
 						finalObject.url = replaceUmlaute(finalObject.name).toLowerCase();
 					}
@@ -490,7 +636,7 @@ var getEvents = function(_html) {
 var replaceUmlaute = function(_text) {
 
 	var text = _text.toString();
-	text = text.replace(/oe/g,'oe');
+	text = text.replace(/ö/g,'oe');
 	text = text.replace(/Ö/g,'Oe');
 	text = text.replace(/Ü/g,'ue');
 	text = text.replace(/ü/g,'ue');
@@ -501,29 +647,30 @@ var replaceUmlaute = function(_text) {
 	return text;
 };
 
-var getUrl = function(_url, callback, _index, _encoding) {
-	var encoding = typeof _encoding !== 'undefined' ? _encoding : 'utf-8';
-	// console.log('encoding : ',encoding);
+var getJson = function(_url, callback, _index, _encoding) {
 	/**
 	 * request url
 	 */
 	// Configure the request
-	var options = {
-		url: _url,
-		method: 'GET'
-	};
-	var req = http.get(_url, function(res){
+	var _onReturn = function (res) {
 		console.log('request');
-		var finalStr='';
-		res.on('data', function(chunk){
+		var finalStr = '';
+		var _body = '';
+		res.on('data', function (chunk) {
 			// console.log('chunk!');
-			finalStr += replaceUmlaute(iconv.decode(chunk, encoding));
-			// callback(_body);
-			// writeToFile(iconv.decode(chunk, 'iso-8859-1'));
+			if (typeof _encoding !== 'undefined'){
+				finalStr += replaceUmlaute(iconv.decode(chunk, _encoding));
+			} else {
+				finalStr += chunk;
+			}
 		});
-		res.on('end', function(){
-			console.log('loaded!');
-			var _body = replaceUmlaute(iconv.decode(finalStr, encoding));
+		res.on('end', function () {
+			// console.log('loaded!');
+			if (typeof _encoding !== 'undefined'){
+				_body = replaceUmlaute(iconv.decode(finalStr, encoding));
+			} else {
+				_body = finalStr;
+			}
 			// console.log('_body : ',_body);
 			if (typeof _index !== 'undefined') {
 				callback(_body, _index);
@@ -531,7 +678,14 @@ var getUrl = function(_url, callback, _index, _encoding) {
 				callback(_body);
 			}
 		});
-	});
+	};
+	var req;
+	if (_url.indexOf('https')>-1) {
+		var req = https.get(_url, _onReturn);
+	} else {
+		var req = http.get(_url, _onReturn);
+	}
+
 	req.on('error', function (e) {
 		console.log('Error accessing URL');
 		if (typeof _index !== 'undefined') {
@@ -540,6 +694,42 @@ var getUrl = function(_url, callback, _index, _encoding) {
 			callback(null);
 		}
 	});
+};
+
+var getUrl = function(_url, callback, _index, _encoding) {
+	var _body;
+	request({
+		url: _url,
+		agentClass: Agent,
+		agentOptions: {
+			socksHost: 'localhost', // Defaults to 'localhost'.
+			socksPort: 9050 // Defaults to 1080.
+		},
+		timeout : 100000
+	}, function(err, res) {
+		// console.log(err || res.body);
+		if (!err){
+			if (typeof _encoding !== 'undefined') {
+				_body = replaceUmlaute(iconv.decode(res.body, encoding));
+			} else {
+				_body = replaceUmlaute(res.body);
+			}
+			// console.log('_body: ',_body);
+			if (typeof _index !== 'undefined') {
+				callback(_body, _index);
+			} else {
+				callback(_body);
+			}
+		} else {
+			console.log('ERROR! : ',err);
+			counter++;
+			console.log(counter + ' / '+ _events.length);
+			if (counter === _events.length-1) {
+				writeToFile(writeFile.fin,_events);
+			}
+		}
+
+	});
 
 };
 
@@ -547,12 +737,12 @@ var getUrl = function(_url, callback, _index, _encoding) {
 
 removeFile(writeFile.fin);
 console.log('process.argv : ',process.argv[2]);
-// url = process.argv[2];
+
 url = '';
-
-
-console.log('url : ', url+process.argv[2]);
+console.log('url : ', url);
 // getUrl(url + process.argv[2],getEvents);
-//getEventDetails('');
-openFile('temp.json', checkIfMapDataExists);
+
+// getEventDetails('');
+// openFile('temp.json', checkIfMapDataExists);
 // getEventDetail();
+// getUrl('', getEventDetails);
