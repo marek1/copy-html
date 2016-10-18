@@ -42,7 +42,8 @@ var types = [
 	{ id: 'EZF', name : 'Einzelzeitfahren'},
 	{ id: 'RTF', name : 'Radtourenfahrt'},
 	{ id: 'XR', name : 'Cyclocross'},
-	{ id: 'SC', name : 'Schwimmen'}
+	{ id: 'SC', name : 'Schwimmen'},
+    { id: 'HL', name : 'Hürdenlauf'}
 ];
 var findInType = function(_whichName){
 	var returnType = 'TR';
@@ -54,13 +55,15 @@ var findInType = function(_whichName){
 	return returnType;
 };
 var returnIsoDate = function(_whichDate) {
-	var _date = _whichDate.replace(/ /g,'');
-	var splitDate = _date.split('.');
+    console.log('_whichDate : ', _whichDate);
+	var _string = _whichDate.replace(/ /g,'');
+    var _date = _string.split(',');
+	var splitDate = _date[1].split('.');
 	console.log(splitDate[2]+'-'+splitDate[1]+'-'+splitDate[0]);
 	return new Date(splitDate[2],splitDate[1]-1,splitDate[0]);
 };
 var returnEmail = function(_email){
-	return _email.replace(/aet/g,'@').replace(/at/g,'').replace('(','').replace(')','');
+	return _email.toString().trim().replace('[at]', '@').replace('(','').replace(')','').replace(/ /g,'');
 };
 var writeFile = {
 	href: 'href.json',
@@ -92,16 +95,17 @@ var encoding = require("encoding");
 /**
  * take final json to add image
  */
-var getImg = function(_rawHtml, _index){
+var getImg = function(_rawHtml, _obj){
 
-	// console.log('_rawHtml : ',_rawHtml);
+    console.log('get image _obj : ', _obj);
+	console.log('_rawHtml : ',_rawHtml);
 
 	if (_rawHtml){
 
 		var $ = cheerio.load(_rawHtml);
 
 		// overwrite image only if not already has content
-		if (_events[_index].image.length<1) {
+		if (_obj.image && _obj.image.length<1) {
 
 			var imgs = $('img');
 
@@ -110,9 +114,9 @@ var getImg = function(_rawHtml, _index){
 				console.log('_imgUrl : ',_imgUrl);
 				if (_imgUrl) {
 					if (_imgUrl.indexOf('http') > -1) {
-						_events[_index].image = _imgUrl;
+                        _obj.image = _imgUrl;
 					} else {
-						_events[_index].image = _events[_index].website + _imgUrl;
+                        _obj.image = _obj.website + _imgUrl;
 					}
 				}
 			}
@@ -125,12 +129,7 @@ var getImg = function(_rawHtml, _index){
 
 	console.log(counter + ' / '+ _events.length);
 
-	if (counter === _events.length-1) {
-		// getMapData();
-		writeToFile(writeFile.fin,_events);
-	}
-
-
+    getMapData(_obj);
 
 };
 
@@ -142,17 +141,11 @@ var makeUrl = function(){
 	}
 };
 
-var prettifyUrl = function(){
-	for (var i=0; i<_events.length; i++) { //_events.length
-		if (_events[i].url.indexOf('--') > -1 ){
-			console.log('before : ',_events[i].url);
-			_events[i].url = _events[i].url.substring(0, _events[i].url.indexOf('--')-1);
-			console.log('after : ',_events[i].url);
-		}
-		_events[i].url = _events[i].url.replace(/\s/g, '-').replace(/'/g, '').replace('(','').replace(')','').replace('.','').replace('/','-').replace('---','-').replace('--','-');
-		_events[i].url = replaceUmlaute(_events[i].url);
-		writeToFile(writeFile.fin,_events[i]);
-	}
+var prettifyUrl = function(_url){
+    if (_url.indexOf('http') > -1) {
+        return _url;
+    }
+    return 'http://'+_url;
 };
 
 var prettifyPlace = function(){
@@ -301,18 +294,19 @@ var goToGoogle = function() {
 	}
 };
 
-var goToWebsite = function(){
+var goToWebsite = function(_obj){
 
-	// console.log('_json[0] : ',_json[0]);
-	for (var i=0; i<_events.length; i++) { //_events.length
-		console.log('get website : ',_events[i].website);
-		if (_events[i].website.length>7) {
-			getUrl(_events[i].website, getImg, i);
-		} else {
-			counter++;
-			writeToFile(writeFile.fin,_events[i]);
-		}
-	}
+	console.log('_obj : ',_obj);
+	// for (var i=0; i<_events.length; i++) { //_events.length
+	// 	console.log('get website : ',_events[i].website);
+    if (_obj.website && _obj.website.length>7) {
+        console.log('...get url : ', _obj.website);
+        getUrl(_obj.website, getImg, _obj);
+    } else {
+        counter++;
+        writeToFile(writeFile.fin,_obj);
+    }
+	// }
 
 };
 
@@ -321,8 +315,7 @@ var goToWebsite = function(){
  * and mapping result to states (above)
  */
 
-var getCountry = function(_rawData, _index){
-
+var getCountry = function(_rawData, _obj){
 
 	try
 	{
@@ -330,68 +323,61 @@ var getCountry = function(_rawData, _index){
 
 		// var display_name = mapData[0]['display_name'];
 
-		_events[_index].state = findInState(mapData[0]['display_name']);
+		_obj.state = findInState(mapData[0]['display_name']);
 
-		_events[_index].lat = mapData[0]['lat'];
+		_obj.lat = mapData[0]['lat'];
 
-		_events[_index].lon = mapData[0]['lon'];
+		_obj.lon = mapData[0]['lon'];
 	}
 	catch(e)
 	{
 		console.log('invalid json');
 	}
 
-
-	console.log(_index + ' : ' +_events[_index]);
-
-	writeToFile(writeFile.fin,_events[_index]);
+	writeToFile(writeFile.fin,_obj);
 
 };
 
 
-var getMapData = function() {
+var getMapData = function(_obj) {
 
-	for (var i=0; i<_events.length; i++) { //_events.length
+    if (_obj.lat === '' || _obj.lon === '') {
+        var zip = '';
+        if ( _obj.zip.length > 0){
+            zip = _obj.zip;
+        }
+        var country = 'Deutschland';
+        if ( _obj.country === 'AT'){
+            country = 'Oesterreich';
+        }
+        if ( _obj.country === 'CH'){
+            country = 'Schweiz';
+        }
+        if ( _obj.country === 'NL'){
+            country = 'Niederlande';
+        }
+        if ( _obj.country === 'CZ'){
+            country = 'Tschechische+Republik';
+        }
+        if ( _obj.country === 'IT'){
+            country = 'Italien';
+        }
+        if ( _obj.country === 'BE'){
+            country = 'Belgien';
+        }
+        getJson('http://nominatim.openstreetmap.org/search.php?q='+zip+'+'+_obj.place +'+'+country+'&format=json&limit=1', getCountry, _obj);
 
-		if (typeof _events[i].lat === 'undefined') {
-			console.log(' no map data for : ', _events[i].name);
-			var zip = '';
-			if ( _events[i].zip.length > 0){
-				zip = _events[i].zip;
-			}
-			var country = 'Deutschland';
-			if ( _events[i].country === 'AT'){
-				country = 'Oesterreich';
-			}
-			if ( _events[i].country === 'CH'){
-				country = 'Schweiz';
-			}
-			if ( _events[i].country === 'NL'){
-				country = 'Niederlande';
-			}
-			if ( _events[i].country === 'CZ'){
-				country = 'Tschechische+Republik';
-			}
-			if ( _events[i].country === 'IT'){
-				country = 'Italien';
-			}
-			if ( _events[i].country === 'BE'){
-				country = 'Belgien';
-			}
-			getJson('http://nominatim.openstreetmap.org/search.php?q='+zip+'+'+_events[i].place +'+'+country+'&format=json&limit=1', getCountry, i);
-
-		} else {
-			writeToFile(writeFile.fin,_events[i]);
-		}
-	}
+    } else {
+        writeToFile(writeFile.fin,_obj);
+    }
 
 };
 
 var filterLinks = function(){
 	for (var i=0; i<_events.length; i++) { //_events.length
-		// if (_events[i].href.indexOf('')>-1){
-			writeToFile(writeFile.temp, _events[i]);
-		// }
+    // if (_events[i].href.indexOf('')>-1){
+        writeToFile(writeFile.temp, _events[i]);
+    // }
 	}
 };
 var compare = function(){
@@ -417,6 +403,7 @@ var compareWith = function() {
 
 var openFile = function(_fileName, callback, _saveAs) {
 	fs.readFile(_fileName, function (err, data) {
+	    console.log('err: ', err, ' data ', data);
 		if (err) {
 			return console.error(err);
 		}
@@ -438,12 +425,12 @@ var openFile = function(_fileName, callback, _saveAs) {
  */
 var filterHtml = function(_rawHtml){
 
-	console.log('_rawHtml : ',_rawHtml);
+	// console.log('_rawHtml : ',_rawHtml);
 
 	var finalObject = {
 		"name": "",
 		"url": "",
-		"sport_type": "LF",
+		"sport_type": "RTF",
 		"organiser": "",
 		"contact_person": "",
 		"date_from": "",
@@ -457,95 +444,150 @@ var filterHtml = function(_rawHtml){
 		"tel": "",
 		"email": "",
 		"image": "",
-		"description": ""
+		"description": "",
+        "lat":"",
+        "lon":"",
+        "priceCategories": [],
+        "routeSurface":[],
+        "routeProfile":[],
+        "datesPrevious":[]
 	};
 
 	// var filteredHtml = iconv.decode(_rawHtml, 'utf8');
 	var $ = cheerio.load(_rawHtml);
 
-	var eventDetails = $('#ausgabe1')[0];
+    finalObject.name = trimFirst($('h1').text());
+    finalObject.url = trimUrl(finalObject.name);
+
+    var eventDetails = $('table')[0];
 
 	if (typeof eventDetails !== 'undefined') {
 
 		$(eventDetails).each( function(index, element) {
 
-			var _el = $(element).find('td');
+            var _tr = $(element).find('tr');
 
-			if (typeof _el !== 'undefined') {
+			if (typeof _tr !== 'undefined') {
 
-				_el.each(function (_i, _e) {
+                _tr.each(function (_i, _e) {
 
-					var _data = $(_e)[0].children[0];
+                    var _td = $(_tr[_i]).find('td');
 
-					if (_i === 0){
-						var _date = returnIsoDate(_data.data);
+                    var _text = $(_td).text();
+
+                    if (_i === 0){
+						var _date = returnIsoDate(_text);
 						finalObject.date_from = _date;
 						finalObject.date_till = _date;
-					}
+                    }
 
-					if (_i === 1){
-						finalObject.name = _data.children[0].data;
-						finalObject.url = _data.children[0].data.replace(/\s/g, '-');
-					}
+                    if (_i === 2){
+                        finalObject.organiser = _text;
+                    }
 
-					if (_i === 2){
-						finalObject.place = replaceUmlaute(_data.data);
-						finalObject.name = finalObject.name + ' ' + finalObject.place;
-						finalObject.url = replaceUmlaute(finalObject.name).toLowerCase();
-					}
+                    if (_i === 3){
+                        finalObject.state= findInState(_text);
+                    }
 
-				});
+                    if (_i === 4){
+                        var _distances = _text.replace(/([a-zA-Z ])/g, "").split('/');
+                        // console.log('_distances : ', _distances);
+                        finalObject.priceCategories.push({
+                            "description": "Radfahren",
+                            "distances": [parseInt(_distances[0]), 2],
+                            "price": 0,
+                            "unit": 1
+                        });
+                        finalObject.priceCategories.push({
+                            "description": "Radfahren",
+                            "distances": [parseInt(_distances[1]), 2],
+                            "price": 0,
+                            "unit": 1
+                        });
+                    }
+
+                    if (_i === 7) {
+                        finalObject.description = _text;
+                    }
+
+                    if (_i === 8) {
+
+                        finalObject.description+='<br>';
+                        finalObject.description+= _text;
+                    }
+
+                    if (_i === 10) {
+                        finalObject.website = prettifyUrl(_text);
+                    }
+                });
 
 			}
 
 		});
 	}
 
-	// Event Details : Email + Website
+    var eventDetails1 = $('table')[1];
 
-	var addressDetails = $('#ausgabe2')[0];
+    if (typeof eventDetails1 !== 'undefined') {
 
-	if (typeof addressDetails !== 'undefined') {
+        $(eventDetails1).each( function(index, element) {
 
-		$(addressDetails).each( function(index, element) {
+            var _tr = $(element).find('tr');
 
-			var _el = $(element).find('td');
+            if (typeof _tr !== 'undefined') {
 
-			if (typeof _el !== 'undefined') {
+                _tr.each(function (_i, _e) {
 
-				_el.each(function(_i,_e){
+                    var _td = $(_tr[_i]).find('td');
 
-					var _data = $(_e)[0].children[0];
+                    var _text = $(_td).text();
+                    var _html = $(_td).html();
 
-					if (_data.data.toString().toLowerCase().indexOf('email') > -1) {
-						finalObject.email = returnEmail(_data.data.toString().toLowerCase().replace('email', '').replace(':', '').replace(/\s/g, ''));
-					}
-					if (_data.data.toString().toLowerCase().indexOf('homepage') > -1) {
-						var _website = _data.next.attribs.href;
-						finalObject.website = _website;
-					}
-				});
+                    console.log('_td : ', _td, ' _text ', _text);
 
-			}
+                    if (_i === 1){
+                        finalObject.contact_person = _text;
+                    }
 
-		});
+                    if (_i === 2) {
+                        var _adr = _html.split('<br>');
+                        finalObject.address = _adr[0];
+                        var _plzOrt = _adr[1].split(' ');
+                        finalObject.zip = _plzOrt[0];
+                        finalObject.place = _plzOrt[1];
+                    }
 
+                    if (_i === 3) {
+                        finalObject.tel = _text;
+                    }
 
-		console.log('finalObject : ',finalObject);
+                    if (_i === 4) {
+                        finalObject.email = returnEmail(_text);
+                    }
+                });
 
-	}
-	_events.push(finalObject);
+            }
 
-	console.log(_events.length + ' / ' +hrefCounter);
-	if (_events.length === hrefCounter){
+        });
+    }
+
+    console.log('finalObject : ',finalObject);
+
+    _events.push(finalObject);
+
+	console.log(_events.length + ' / ' + hrefCounter);
+	// if (_events.length === hrefCounter){
 		// get
 		// get Image
-		goToWebsite();
-	}
+		// goToWebsite();
+	// }
+
+    goToWebsite(finalObject);
 
 	// console.log('_events.length : ',_events.length);
 	//remove in a bit
 	writeToFile(writeFile.temp, finalObject);
+
 
 };
 
@@ -588,7 +630,9 @@ var getEventDetails = function(_url){
 
 	//console.log('_url : ',_url);
 
-	getUrl(url+_url, filterHtml);
+    _events.map(function(_obj){
+        getUrl(url+_obj.href, filterHtml);
+    });
 
 };
 
@@ -606,6 +650,8 @@ var getEvents = function(_html) {
 
 	hrefArray = $('a');
 
+    // console.log('hrefArray : ', hrefArray);
+
 	if (hrefArray.length<1){
 		return false;
 	}
@@ -613,25 +659,33 @@ var getEvents = function(_html) {
 
 		var a = hrefArray[i].attribs.href;
 
-		console.log('a : ',a );
+		if (a.indexOf('termine')>-1) {
 
-		if (a.indexOf('volkslauf')>-1) {
+        	writeToFile(writeFile.href, { href : a });
 
-			writeToFile(writeFile.href, { href : a });
-
-			getEventDetails(hrefArray[i].attribs.href);
+			getEventDetails(a);
 
 			hrefCounter++;
 
 		}
-
 	}
-
 
 };
 
+var trimFirst = function(_str) {
+    return _str.charAt(0) == ' ' ? _str.substring(1, _str.length) : _str;
+};
 
-
+var trimUrl = function(url) {
+    return trimFirst(url.toString())
+        .toLowerCase()
+        .replace(/\s/g, '-')
+        .replace(/[áàâä]/g, 'ae')
+        .replace(/[úùûü]/g, 'ue')
+        .replace(/[ö]/g, 'oe')
+        .replace(/[ß]/g, 'ss')
+        .replace(/[^A-Za-z0-9\-_]/g, '-');
+};
 
 var replaceUmlaute = function(_text) {
 
@@ -647,7 +701,7 @@ var replaceUmlaute = function(_text) {
 	return text;
 };
 
-var getJson = function(_url, callback, _index, _encoding) {
+var getJson = function(_url, callback, _obj, _encoding) {
 	/**
 	 * request url
 	 */
@@ -671,9 +725,8 @@ var getJson = function(_url, callback, _index, _encoding) {
 			} else {
 				_body = finalStr;
 			}
-			// console.log('_body : ',_body);
-			if (typeof _index !== 'undefined') {
-				callback(_body, _index);
+			if (typeof _obj !== 'undefined') {
+				callback(_body, _obj);
 			} else {
 				callback(_body);
 			}
@@ -696,7 +749,52 @@ var getJson = function(_url, callback, _index, _encoding) {
 	});
 };
 
-var getUrl = function(_url, callback, _index, _encoding) {
+
+
+var getUrl_1 = function(_url, callback, _index, _encoding) {
+    var encoding = typeof _encoding !== 'undefined' ? _encoding : 'utf-8';
+    // console.log('encoding : ',encoding);
+    /**
+     * request url
+     */
+    // Configure the request
+    var options = {
+            url: _url,
+            method: 'GET'
+    };
+    console.log('getting url : ', _url);
+    var req = http.get(_url, function(res){
+        console.log('request');
+        var finalStr='';
+        res.on('data', function(chunk){
+            // console.log('chunk!');
+            finalStr += replaceUmlaute(iconv.decode(chunk, encoding));
+            // callback(_body);
+            // writeToFile(iconv.decode(chunk, 'iso-8859-1'));
+        });
+        res.on('end', function(){
+            console.log('loaded!');
+            var _body = replaceUmlaute(iconv.decode(finalStr, encoding));
+            // console.log('_body : ',_body);
+            if (typeof _index !== 'undefined') {
+                callback(_body, _index);
+            } else {
+                callback(_body);
+            }
+        });
+    });
+    req.on('error', function (e) {
+        console.log('Error accessing URL');
+        if (typeof _index !== 'undefined') {
+            callback(null, _index);
+        } else {
+            callback(null);
+        }
+    });
+
+};
+// TOR
+var getUrl = function(_url, callback, _obj, _encoding) {
 	var _body;
 	request({
 		url: _url,
@@ -715,8 +813,8 @@ var getUrl = function(_url, callback, _index, _encoding) {
 				_body = replaceUmlaute(res.body);
 			}
 			// console.log('_body: ',_body);
-			if (typeof _index !== 'undefined') {
-				callback(_body, _index);
+			if (typeof _obj !== 'undefined') {
+				callback(_body, _obj);
 			} else {
 				callback(_body);
 			}
@@ -734,15 +832,15 @@ var getUrl = function(_url, callback, _index, _encoding) {
 };
 
 // get urls + create json
-
-removeFile(writeFile.fin);
+// removeFile(writeFile.href);
+// removeFile(writeFile.temp);
+// removeFile(writeFile.fin);
 console.log('process.argv : ',process.argv[2]);
-
-url = '';
+url = process.argv[2] || '';
 console.log('url : ', url);
-// getUrl(url + process.argv[2],getEvents);
+// getUrl(url + process.argv[2], getEvents);
 
 // getEventDetails('');
-// openFile('temp.json', checkIfMapDataExists);
+openFile('href.json', getEventDetails);
 // getEventDetail();
 // getUrl('', getEventDetails);

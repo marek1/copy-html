@@ -2,7 +2,7 @@ var Agent = require('socks5-http-client/lib/Agent');
 var request = require('request');
 
 request({
-    url: '',
+    url: 'http://welldoo.com',
     agentClass: Agent,
     agentOptions: {
         socksHost: 'localhost', // Defaults to 'localhost'.
